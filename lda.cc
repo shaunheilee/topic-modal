@@ -1,7 +1,6 @@
 #include <iostream>
 #include <vector>
 #include <Eigen/Dense>
-#include <Eigen/Sparse>
 #include <tuple>
 #include <string>
 #include <fstream>
@@ -10,7 +9,6 @@
 #include <cstdlib>
 
 using namespace std;
-typedef Eigen::Triplet<int> T;
 typedef tuple<int, int> Token;
 typedef vector<Token>   Tokens;
 typedef boost::unordered_map<string, int> umap;
@@ -73,7 +71,6 @@ class LDA{
 
         void gibbsample(){
             int di, wi, k, _k = 0;
-            //float *pa = new float[K], s = 0;
             for(int i = 0 ; i < tks.size(); i++){
                 di = get<0>(tks[i]);
                 wi = get<1>(tks[i]);
@@ -85,12 +82,6 @@ class LDA{
 
                 auto v =  (tw.col(wi) + beta) * (dt.col(di) + alpha) / (tpw + V * beta);
                 auto s = v.sum();
-                /*
-                for(int j = 0; j < K; j++){
-                    pa[j] = (beta + tw[wi * K + j] * (alpha + dt[di * K + j])) / (tpw[j] + V * beta);
-                    s += pa[j];
-                }
-                */
                 // select a new topic
                 float r = (rand() % 10000) * s / 10000.0, _s = 0;
                 _k = 0;
@@ -104,7 +95,6 @@ class LDA{
                 tpw(_k) += 1;
                 topics(i) = _k;
             } 
-            //delete [] pa;
         }
 
         void train(){

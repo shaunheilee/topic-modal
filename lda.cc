@@ -3,13 +3,10 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 #include <tuple>
-#include <boost/tokenizer.hpp>
 #include <string>
 #include <fstream>
 #include <boost/unordered_map.hpp>
-#include <boost/algorithm/string.hpp>
 #include <map>
-#include <boost/lexical_cast.hpp>
 #include <cstdlib>
 
 using namespace std;
@@ -20,6 +17,8 @@ typedef boost::unordered_map<string, int> umap;
 typedef boost::unordered_map<int, string> imap;
 using namespace Eigen;
 
+#define OUT_BUF_SIZE    1024
+
 class LDA{
     public:
         imap    m1;
@@ -27,10 +26,10 @@ class LDA{
         Tokens  tks;
         float   alpha, beta;
         int     K, niter, V;
-        float * dt;
-        float * tw;
-        float * tpw;
-        int * topics;
+        ArrayXXf dt;
+        ArrayXXf tw;
+        ArrayXf tpw;
+        ArrayXi topics;
         LDA(float a, float b, int k, int n){
             alpha = a;
             beta = b;
@@ -43,39 +42,48 @@ class LDA{
             ofstream word_topic;
             doc_topic.open("doc_topic", ios::out);
             word_topic.open("word_topic", ios::out);
+            char buf[OUT_BUF_SIZE];
+            int k;
             for(int i = 0 ; i < m1.size(); i++){
-                doc_topic << m1[i];
+                snprintf(buf, OUT_BUF_SIZE, "%s", m1[i].c_str());
+                k = strlen(buf);
                 for(int j = 0; j < K; j++){
-                    auto c = dt[i * K + j];
-                    doc_topic << "\t" << boost::lexical_cast<string>(c);
+                    int c = dt(j, i);
+                    sprintf(buf + k, "\t%d", c);
+                    k = strlen(buf);
                 }
-                doc_topic << endl;
+                snprintf(buf + k, OUT_BUF_SIZE, "\n");
+                doc_topic.write(buf, strlen(buf));
             }
             doc_topic.close();
+
             for(int i = 0; i < m2.size(); i++){
-                word_topic << m2[i];
+                snprintf(buf, OUT_BUF_SIZE, "%s", m2[i].c_str());
+                k = strlen(buf);
                 for(int j = 0; j < K; j++){
-                    auto c = tw[i * K + j];
-                    word_topic << "\t" << boost::lexical_cast<string>(c);
+                    int c = tw(j, i);
+                    sprintf(buf + k, "\t%d", c);
+                    k = strlen(buf);
                 }
-                word_topic << endl;
+                snprintf(buf + k, OUT_BUF_SIZE, "\n");
+                word_topic.write(buf, strlen(buf));
             }
             word_topic.close();
         }
 
-        void gibbsample(Map<ArrayXXf>& d, Map<ArrayXXf>& w, Map<ArrayXf> _tpw){
+        void gibbsample(){
             int di, wi, k, _k = 0;
             //float *pa = new float[K], s = 0;
             for(int i = 0 ; i < tks.size(); i++){
                 di = get<0>(tks[i]);
                 wi = get<1>(tks[i]);
-                k = topics[i];
+                k = topics(i);
 
-                dt[di * K + k] -= 1;
-                tw[wi * K + k] -= 1;
-                tpw[k] -= 1;
+                dt(k, di) -= 1;
+                tw(k, wi) -= 1;
+                tpw(k) -= 1;
 
-                auto v =  (w.col(wi) + beta) * (d.col(di) + alpha) / (_tpw + V * beta);
+                auto v =  (tw.col(wi) + beta) * (dt.col(di) + alpha) / (tpw + V * beta);
                 auto s = v.sum();
                 /*
                 for(int j = 0; j < K; j++){
@@ -91,10 +99,10 @@ class LDA{
                     if(r < _s)
                         break;
                 }
-                dt[di * K + _k] += 1;
-                tw[wi * K + _k] += 1;
-                tpw[_k] += 1;
-                topics[i] = _k;
+                dt(_k, di) += 1;
+                tw(_k, wi) += 1;
+                tpw(_k) += 1;
+                topics(i) = _k;
             } 
             //delete [] pa;
         }
@@ -105,33 +113,31 @@ class LDA{
             int s2 = m2.size(); // word
             int s3 = tks.size(); // tokens
             V = s2;
-            dt = (float *) malloc(s1 * K * sizeof(float));
-            memset(dt, 0, s1 * K * sizeof(float));
+            
+            dt.resize(K, s1);
+            dt.setZero();
 
-            tw = (float *) malloc(s2 * K * sizeof(float));
-            memset(tw, 0, s2 * K * sizeof(float));
+            tw.resize(K, s2);
+            tw.setZero();
 
-            tpw = (float *) malloc(K * sizeof(float));
-            memset(tpw, 0, K * sizeof(float));
+            tpw.resize(K);
+            tpw.setZero();
 
-            topics = (int *) malloc( s3 * sizeof(int));
+            topics.resize(s3);
 
             int di, wi, k;
             for(int i = 0 ; i < s3; i++){
-                k = topics[i] = rand() % K;
+                k = topics(i) = rand() % K;
                 di = get<0>(tks[i]);
                 wi = get<1>(tks[i]);
-                dt[di * K + k] += 1;
-                tw[wi * K + k] += 1;
-                tpw[k] += 1;
+                dt(k, di) += 1;
+                tw(k, wi) += 1;
+                tpw(k) += 1;
             }
 
-            Map<ArrayXf> _tpw(tpw, K);
-
-            Map<ArrayXXf> w(tw, K, s2), d(dt, K, s1);
             for(int i = 0 ; i < niter; i++){
                 cerr<<"Iter: "<<i<<"\t...\t";
-                gibbsample(d, w, _tpw);
+                gibbsample();
                 cerr<<"done!"<<endl;
             }
         }
@@ -183,11 +189,10 @@ int load_tokens(string& fname, LDA& lda){
 
 int main(int argc, char * argv[]){
     string st(argv[1]);
-    using boost::lexical_cast;
-    float a = lexical_cast<float>(argv[2]);
-    float b = lexical_cast<float>(argv[3]);
-    int k = lexical_cast<int>(argv[4]);
-    int n = lexical_cast<int>(argv[5]);
+    float a = atof(argv[2]);
+    float b = atof(argv[3]);
+    int k = atoi(argv[4]);
+    int n = atoi(argv[5]);
     LDA lda(a, b, k, n);
     load_tokens(st, lda);
     lda.train();

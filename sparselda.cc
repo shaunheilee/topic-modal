@@ -107,12 +107,12 @@ class LDA{
 
         void gibbsample(int _it){
             int di, wi, k, _k = 0, _K = K + 1, p, preidx = -1;
-            float e, f, g, s;
+            double e, f, g, s;
             float ab = alpha * beta, vb = V * beta, div, r;
             float * ea = new float[K], *fa = new float[K], *ga = new float[K];
-            memset(ea, 0, sizeof(int) * K);
-            memset(fa, 0, sizeof(int) * K);
-            memset(ga, 0, sizeof(int) * K);
+            memset(ea, 0, sizeof(float) * K);
+            memset(fa, 0, sizeof(float) * K);
+            memset(ga, 0, sizeof(float) * K);
             e = 0;
             for(int i = 0; i < K; i++){
                 ea[i] = ab / (tpw[i] + vb);
@@ -162,13 +162,16 @@ class LDA{
                 }
                 s = e + f + g;
                 r = rand() % 1000 * s / 1000.0;
-                float _s = 0;
+                double _s = 0;
                 if(r < e){
                     for(_k = 0; _k < K; _k++){
                         _s += ea[_k];
                         if(r < _s)
                             break;
                     }
+                    if(_k == K)
+                        _k = K - 1;
+                    //cout<<_s<<" "<<r<<endl;
                 }
                 else
                 if(r < e + f){

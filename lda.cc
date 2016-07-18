@@ -133,18 +133,6 @@ class LDA{
         }
 };
 
-int split(char * buf, int * idx, const char* sep){
-    char *p = buf;
-    int c = 0;
-    idx[0] = 0;
-
-    while(strsep(&p, sep)){
-        ++c;
-        idx[c] = p - buf;
-    }
-    return c;
-}
-
 int load_tokens(string& fname, LDA& lda){
     Tokens& tks = lda.tks;
     imap& m1 = lda.m1;

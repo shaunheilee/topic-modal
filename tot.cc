@@ -43,7 +43,10 @@ class LDA{
             niter = n;
         }
 
-        void update_beta_params(){
+        ~LDA(){
+        }
+
+        void update_beta_params(int cflag){
             // cal sample mean for each topic
             // cal biased sampe varience for each topic
             // using method of moments to estimate beta params
@@ -59,15 +62,17 @@ class LDA{
                 // using boost estimator
                 get<0>(bps[i]) = beta_distribution<>::find_alpha(mean, var);
                 get<1>(bps[i]) = beta_distribution<>::find_beta(mean, var);
-                ts[i].clear();
+                if(cflag == 0)
+                    ts[i].clear();
             }
         }
 
         void output(){
             ofstream doc_topic;
-            ofstream word_topic;
+            ofstream word_topic, topic_time;
             doc_topic.open("doc_topic", ios::out);
             word_topic.open("word_topic", ios::out);
+            topic_time.open("topic_time", ios::out);
             char buf[OUT_BUF_SIZE];
             int k;
             for(int i = 0 ; i < m1.size(); i++){
@@ -95,6 +100,23 @@ class LDA{
                 word_topic.write(buf, strlen(buf));
             }
             word_topic.close();
+
+            int tsz = 0;
+            for(int i = 0; i < K; i++){
+                snprintf(buf, OUT_BUF_SIZE, "topic:%d", i);
+                k = strlen(buf);
+                for(int j = 0; j < ts[i].size(); j++){
+                    sprintf(buf + k, "\t%.4f", ts[i][j]);
+                    k = strlen(buf);
+                    if(k > OUT_BUF_SIZE - 5){
+                        topic_time.write(buf, strlen(buf));
+                        k = 0;
+                    }
+                }
+                snprintf(buf + k, OUT_BUF_SIZE, "\n");
+                topic_time.write(buf, strlen(buf));
+            }
+            topic_time.close();
         }
 
         void gibbsample(){
@@ -120,7 +142,7 @@ class LDA{
                 // evaluate beta[k][t]
                 for(int j = 0; j < K; j++)
                     _bp[j] = pdf(bfs[j], t);
-               
+
                 Map<ArrayXf> bp(_bp.data(), K);
 
                 auto v =  bp * (tw.col(wi) + beta) * (dt.col(di) + alpha) / (tpw + V * beta);
@@ -174,12 +196,12 @@ class LDA{
             }
 
             // init beta parameters
-            update_beta_params();
+            update_beta_params(0);
 
             for(int i = 0 ; i < niter; i++){
                 cerr<<"Iter: "<<i<<"\t...\t";
                 gibbsample();
-                update_beta_params();
+                update_beta_params(i == (niter - 1));
                 cerr<<"done!"<<endl;
             }
         }
@@ -203,7 +225,7 @@ int load_tokens(string& fname, LDA& lda){
         pos1 = s.find("\t", pos + 1);
         sz = s.length();
         string t1 = s.substr(0, pos);
-        string t2 = s.substr(pos + 1, pos1 - pos);
+        string t2 = s.substr(pos + 1, pos1 - pos - 1);
         float t = atof(s.substr(pos1 + 1, sz - pos1).c_str());
         if(x.find(t1) == x.end()){
             x[t1] = c1;
@@ -228,7 +250,9 @@ int main(int argc, char * argv[]){
     int n = atoi(argv[5]);
     LDA lda(a, b, k, n);
     load_tokens(st, lda);
+    cerr<<"load done"<<endl;
     lda.train();
+    cerr<<"saving..."<<endl;
     lda.output();
     return 0;
 }

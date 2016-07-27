@@ -161,7 +161,7 @@ class LDA{
                     p = get_next(tw[wi * _K + p].ptr);
                 }
                 s = e + f + g;
-                r = rand() % 1000 * s / 1000.0;
+                r = rand() % 100000 * s / 100000.0;
                 double _s = 0;
                 if(r < e){
                     for(_k = 0; _k < K; _k++){

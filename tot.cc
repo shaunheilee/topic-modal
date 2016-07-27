@@ -8,6 +8,7 @@
 #include <map>
 #include <cstdlib>
 #include <boost/math/distributions/beta.hpp>
+#include <math.h>
 
 using namespace std;
 using namespace boost::math;
@@ -119,15 +120,33 @@ class LDA{
             topic_time.close();
         }
 
+        void cal_beta_fun(vector<float>& bo){
+            float t, a, b;
+            for(int i = 0; i < bps.size(); i++){
+                t = lgamma(get<0>(bps[i])) * lgamma(get<1>(bps[i])) / lgamma(get<0>(bps[i]) + get<1>(bps[i]));
+                bo.push_back(log(t));
+            }    
+        }
+
         void gibbsample(){
             int di, wi, k, _k = 0;
             float t;
             // prepare K beta func
             vector<beta_distribution<> > bfs;
-            for(int i = 0; i < bps.size(); i++)
+            vector<float> a, b;
+            for(int i = 0; i < bps.size(); i++){
                 bfs.push_back(beta_distribution<>(get<0>(bps[i]), get<1>(bps[i])));
-            vector<float> _bp;
+                a.push_back(get<0>(bps[i]));
+                b.push_back(get<1>(bps[i]));
+            }
+            vector<float> _bp, bo;
             _bp.resize(K);
+            
+            cal_beta_fun(bo);
+
+            Map<ArrayXf> alpha(a.data(), K);
+            Map<ArrayXf> bt(b.data(), K);
+            Map<ArrayXf> div(bo.data(), K);
 
             for(int i = 0 ; i < tks.size(); i++){
                 di = get<0>(tks[i]);
@@ -138,12 +157,14 @@ class LDA{
                 dt(k, di) -= 1;
                 tw(k, wi) -= 1;
                 tpw(k) -= 1;
-
+                
+                auto bp = ((alpha - 1) * log(t) + (bt - 1) * log(1 - t) - div).exp();
                 // evaluate beta[k][t]
+                /*
                 for(int j = 0; j < K; j++)
                     _bp[j] = pdf(bfs[j], t);
-
-                Map<ArrayXf> bp(_bp.data(), K);
+                */
+                //Map<ArrayXf> bp(_bp.data(), K);
 
                 auto v =  bp * (tw.col(wi) + beta) * (dt.col(di) + alpha) / (tpw + V * beta);
                 auto s = v.sum();

@@ -133,8 +133,8 @@ class LDA{
             // prepare K beta func
             vector<float> a, b, bo;
             for(int i = 0; i < bps.size(); i++){
-                a.push_back(get<0>(bps[i]));
-                b.push_back(get<1>(bps[i]));
+                a.push_back(get<0>(bps[i]) - 1);
+                b.push_back(get<1>(bps[i]) - 1);
             }
             cal_beta_fun(bo);
 
@@ -153,7 +153,7 @@ class LDA{
                 tpw(k) -= 1;
                 
                 // evaluate beta[k][t]
-                auto bp = ((alpha - 1) * log(t) + (bt - 1) * log(1 - t) - div).exp();
+                auto bp = (alpha * log(t) + bt * log(1 - t) - div).exp();
                 auto v =  bp * (tw.col(wi) + beta) * (dt.col(di) + alpha) / (tpw + V * beta);
                 auto s = v.sum();
                 // select a new topic

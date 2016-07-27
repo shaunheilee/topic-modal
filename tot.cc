@@ -7,11 +7,9 @@
 #include <boost/unordered_map.hpp>
 #include <map>
 #include <cstdlib>
-#include <boost/math/distributions/beta.hpp>
 #include <math.h>
 
 using namespace std;
-using namespace boost::math;
 typedef tuple<int, int, float> Token;
 typedef vector<Token>   Tokens;
 typedef tuple<float, float> BetaParam;
@@ -51,7 +49,7 @@ class LDA{
             // cal sample mean for each topic
             // cal biased sampe varience for each topic
             // using method of moments to estimate beta params
-            float mean, var, * buf;
+            float mean, var, * buf, tmp;
             int sz;
             for(int i = 0 ; i < ts.size(); i++){
                 buf = ts[i].data();
@@ -61,8 +59,9 @@ class LDA{
                 auto x = v - mean;
                 var = (x * x).sum() / sz; // biased varience
                 // using boost estimator
-                get<0>(bps[i]) = beta_distribution<>::find_alpha(mean, var);
-                get<1>(bps[i]) = beta_distribution<>::find_beta(mean, var);
+                tmp = mean * (1 - mean) / var;
+                get<0>(bps[i]) = mean * (tmp - 1);
+                get<1>(bps[i]) = (1 - mean) * (tmp - 1);
                 if(cflag == 0)
                     ts[i].clear();
             }
@@ -121,10 +120,10 @@ class LDA{
         }
 
         void cal_beta_fun(vector<float>& bo){
-            float t, a, b;
+            float t;
             for(int i = 0; i < bps.size(); i++){
-                t = lgamma(get<0>(bps[i])) * lgamma(get<1>(bps[i])) / lgamma(get<0>(bps[i]) + get<1>(bps[i]));
-                bo.push_back(log(t));
+                t = lgamma(get<0>(bps[i])) + lgamma(get<1>(bps[i])) - lgamma(get<0>(bps[i]) + get<1>(bps[i]));
+                bo.push_back(t);
             }    
         }
 
@@ -132,16 +131,11 @@ class LDA{
             int di, wi, k, _k = 0;
             float t;
             // prepare K beta func
-            vector<beta_distribution<> > bfs;
-            vector<float> a, b;
+            vector<float> a, b, bo;
             for(int i = 0; i < bps.size(); i++){
-                bfs.push_back(beta_distribution<>(get<0>(bps[i]), get<1>(bps[i])));
                 a.push_back(get<0>(bps[i]));
                 b.push_back(get<1>(bps[i]));
             }
-            vector<float> _bp, bo;
-            _bp.resize(K);
-            
             cal_beta_fun(bo);
 
             Map<ArrayXf> alpha(a.data(), K);
@@ -158,14 +152,8 @@ class LDA{
                 tw(k, wi) -= 1;
                 tpw(k) -= 1;
                 
-                auto bp = ((alpha - 1) * log(t) + (bt - 1) * log(1 - t) - div).exp();
                 // evaluate beta[k][t]
-                /*
-                for(int j = 0; j < K; j++)
-                    _bp[j] = pdf(bfs[j], t);
-                */
-                //Map<ArrayXf> bp(_bp.data(), K);
-
+                auto bp = ((alpha - 1) * log(t) + (bt - 1) * log(1 - t) - div).exp();
                 auto v =  bp * (tw.col(wi) + beta) * (dt.col(di) + alpha) / (tpw + V * beta);
                 auto s = v.sum();
                 // select a new topic
